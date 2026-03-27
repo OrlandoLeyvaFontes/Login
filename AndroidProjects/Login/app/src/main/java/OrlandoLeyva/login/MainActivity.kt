@@ -6,48 +6,84 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import OrlandoLeyva.login.ui.PantallaTienda
+import OrlandoLeyva.login.ui.PantallaDetalle
+import OrlandoLeyva.login.ui.PantallaCarrito
+import OrlandoLeyva.login.repository.ProductosRepository
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val prefs = PreferenceManager(context = this)
+        val pref = PreferenceManager(context = this)
+        val gestorCarrito = GestorCarrito(contexto = this)
+        val repositorio = ProductosRepository()
 
         enableEdgeToEdge()
         setContent {
-            var screenState by remember { mutableStateOf(value = if (prefs.isLoggedIn()) "HOME" else "LOGIN") }
+            var estadoPantalla by remember { mutableStateOf(if (pref.isLoggedIn()) "TIENDA" else "ACCESO") }
+            var idProductoSeleccionado by remember { mutableStateOf<Int?>(null) }
 
-            if (screenState == "LOGIN") {
-                LoginScreen(onLoginClick = {
-                    prefs.saveLoginStatus(isLoggedIn = true)
-                    screenState = "HOME"
-                })
-            } else {
-                HomeScreen(onLogoutClick = {
-                    prefs.logout()
-                    screenState = "LOGIN"
-                })
+            when (estadoPantalla) {
+                "ACCESO" -> {
+                    PantallaAcceso(alAcceder = {
+                        pref.saveLoginStatus(isLoggedIn = true)
+                        estadoPantalla = "TIENDA"
+                    })
+                }
+                "TIENDA" -> {
+                    PantallaTienda(
+                        repositorio = repositorio,
+                        gestorCarrito = gestorCarrito,
+                        alNavegarDetalle = { id ->
+                            idProductoSeleccionado = id
+                            estadoPantalla = "DETALLE"
+                        },
+                        alNavegarCarrito = {
+                            estadoPantalla = "CARRITO"
+                        },
+                        alCerrarSesion = {
+                            pref.logout()
+                            estadoPantalla = "ACCESO"
+                        }
+                    )
+                }
+                "DETALLE" -> {
+                    if (idProductoSeleccionado != null) {
+                        PantallaDetalle(
+                            idProducto = idProductoSeleccionado!!,
+                            repositorio = repositorio,
+                            gestorCarrito = gestorCarrito,
+                            alRegresar = { estadoPantalla = "TIENDA" }
+                        )
+                    } else {
+                        estadoPantalla = "TIENDA"
+                    }
+                }
+                "CARRITO" -> {
+                    PantallaCarrito(
+                        repositorio = repositorio,
+                        gestorCarrito = gestorCarrito,
+                        alRegresar = { estadoPantalla = "TIENDA" }
+                    )
+                }
             }
         }
     }
 
     @Composable
-    fun LoginScreen(onLoginClick: () -> Unit) {
-        var email by remember { mutableStateOf("") }
-        var password by remember { mutableStateOf("") }
-        var errorMessage by remember { mutableStateOf("") }
+    fun PantallaAcceso(alAcceder: () -> Unit) {
+        var correo by remember { mutableStateOf("") }
+        var contrasena by remember { mutableStateOf("") }
+        var mensajeError by remember { mutableStateOf("") }
 
         Column(
             modifier = Modifier
@@ -61,8 +97,8 @@ class MainActivity : ComponentActivity() {
             Spacer(modifier = Modifier.height(20.dp))
 
             OutlinedTextField(
-                value = email,
-                onValueChange = { email = it; errorMessage = "" },
+                value = correo,
+                onValueChange = { correo = it; mensajeError = "" },
                 label = { Text("Correo electrónico") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
@@ -71,17 +107,17 @@ class MainActivity : ComponentActivity() {
             Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedTextField(
-                value = password,
-                onValueChange = { password = it; errorMessage = "" },
+                value = contrasena,
+                onValueChange = { contrasena = it; mensajeError = "" },
                 label = { Text("Contraseña") },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true
             )
 
-            if (errorMessage.isNotEmpty()) {
+            if (mensajeError.isNotEmpty()) {
                 Text(
-                    text = errorMessage,
+                    text = mensajeError,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 8.dp)
                 )
@@ -91,10 +127,10 @@ class MainActivity : ComponentActivity() {
 
             Button(
                 onClick = {
-                    if (email == "admin@mail.com" && password == "1234") {
-                        onLoginClick()
+                    if (correo == "admin@mail.com" && contrasena == "1234") {
+                        alAcceder()
                     } else {
-                        errorMessage = "Credenciales incorrectas. Intenta de nuevo."
+                        mensajeError = "Credenciales incorrectas. Intenta de nuevo."
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -103,19 +139,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    @Composable
-    fun HomeScreen(onLogoutClick: () -> Unit) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = "¡Bienvenido al Home!", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { onLogoutClick() }) {
-                Text("Cerrar Sesión")
-            }
-        }
-    }
-
 }
