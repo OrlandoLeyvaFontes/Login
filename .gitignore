@@ -1,0 +1,9 @@
+
+# Android Build Directories
+build/
+app/build/
+.gradle/
+AndroidProjects/Login/build/
+AndroidProjects/Login/app/build/
+AndroidProjects/Login/.gradle/
+
