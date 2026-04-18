@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -23,36 +24,44 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val pref = PreferenceManager(context = this)
-        val gestorCarrito = GestorCarrito(contexto = this)
+        val dataStoreManager = DataStoreManager(context = this)
         val repositorio = ProductosRepository()
 
         enableEdgeToEdge()
         setContent {
-            var estadoPantalla by remember { mutableStateOf(if (pref.isLoggedIn()) "TIENDA" else "ACCESO") }
+            val isLoggedInFlow = dataStoreManager.isLoggedInFlow.collectAsState(initial = null)
+            val scope = rememberCoroutineScope()
             var idProductoSeleccionado by remember { mutableStateOf<Int?>(null) }
+            
+            var estadoPantallaManual by remember { mutableStateOf<String?>(null) }
+            
+            if (isLoggedInFlow.value == null && estadoPantallaManual == null) {
+                return@setContent
+            }
+            
+            val estadoPantalla = estadoPantallaManual ?: if (isLoggedInFlow.value == true) "TIENDA" else "ACCESO"
 
             when (estadoPantalla) {
                 "ACCESO" -> {
                     PantallaAcceso(alAcceder = {
-                        pref.saveLoginStatus(isLoggedIn = true)
-                        estadoPantalla = "TIENDA"
+                        scope.launch { dataStoreManager.guardarEstadoSesion(isLoggedIn = true) }
+                        estadoPantallaManual = "TIENDA"
                     })
                 }
                 "TIENDA" -> {
                     PantallaTienda(
                         repositorio = repositorio,
-                        gestorCarrito = gestorCarrito,
+                        dataStoreManager = dataStoreManager,
                         alNavegarDetalle = { id ->
                             idProductoSeleccionado = id
-                            estadoPantalla = "DETALLE"
+                            estadoPantallaManual = "DETALLE"
                         },
                         alNavegarCarrito = {
-                            estadoPantalla = "CARRITO"
+                            estadoPantallaManual = "CARRITO"
                         },
                         alCerrarSesion = {
-                            pref.logout()
-                            estadoPantalla = "ACCESO"
+                            scope.launch { dataStoreManager.cerrarSesion() }
+                            estadoPantallaManual = "ACCESO"
                         }
                     )
                 }
@@ -61,18 +70,18 @@ class MainActivity : ComponentActivity() {
                         PantallaDetalle(
                             idProducto = idProductoSeleccionado!!,
                             repositorio = repositorio,
-                            gestorCarrito = gestorCarrito,
-                            alRegresar = { estadoPantalla = "TIENDA" }
+                            dataStoreManager = dataStoreManager,
+                            alRegresar = { estadoPantallaManual = "TIENDA" }
                         )
                     } else {
-                        estadoPantalla = "TIENDA"
+                        estadoPantallaManual = "TIENDA"
                     }
                 }
                 "CARRITO" -> {
                     PantallaCarrito(
                         repositorio = repositorio,
-                        gestorCarrito = gestorCarrito,
-                        alRegresar = { estadoPantalla = "TIENDA" }
+                        dataStoreManager = dataStoreManager,
+                        alRegresar = { estadoPantallaManual = "TIENDA" }
                     )
                 }
             }

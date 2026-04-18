@@ -6,14 +6,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import OrlandoLeyva.login.GestorCarrito
+import OrlandoLeyva.login.DataStoreManager
+import kotlinx.coroutines.launch
 import OrlandoLeyva.login.model.Producto
 import OrlandoLeyva.login.repository.ProductosRepository
 
@@ -21,7 +25,7 @@ import OrlandoLeyva.login.repository.ProductosRepository
 @Composable
 fun PantallaTienda(
     repositorio: ProductosRepository,
-    gestorCarrito: GestorCarrito,
+    dataStoreManager: DataStoreManager,
     alNavegarDetalle: (Int) -> Unit,
     alNavegarCarrito: () -> Unit,
     alCerrarSesion: () -> Unit
@@ -44,6 +48,7 @@ fun PantallaTienda(
             )
         }
     ) { relleno ->
+        val context = LocalContext.current
         Column(modifier = Modifier.padding(relleno).fillMaxSize()) {
             OutlinedTextField(
                 value = consultaBusqueda,
@@ -52,13 +57,16 @@ fun PantallaTienda(
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             )
 
+            val scope = rememberCoroutineScope()
+
             LazyColumn {
                 items(productos) { productoLista ->
                     ElementoProducto(
                         producto = productoLista,
                         alHacerClic = { alNavegarDetalle(productoLista.id) },
                         alAgregarCarrito = {
-                            gestorCarrito.agregarAlCarrito(productoLista.id)
+                            scope.launch { dataStoreManager.agregarAlCarrito(productoLista.id) }
+                            Toast.makeText(context, "Se agregó ${productoLista.nombre} al carrito", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
@@ -97,7 +105,7 @@ fun ElementoProducto(producto: Producto, alHacerClic: () -> Unit, alAgregarCarri
 fun PantallaDetalle(
     idProducto: Int,
     repositorio: ProductosRepository,
-    gestorCarrito: GestorCarrito,
+    dataStoreManager: DataStoreManager,
     alRegresar: () -> Unit
 ) {
     val producto = repositorio.obtenerPorId(idProducto)
@@ -126,9 +134,12 @@ fun PantallaDetalle(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(text = producto.descripcion, style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.weight(1f))
+                val scope = rememberCoroutineScope()
+                val context = LocalContext.current
                 Button(
                     onClick = {
-                        gestorCarrito.agregarAlCarrito(producto.id)
+                        scope.launch { dataStoreManager.agregarAlCarrito(producto.id) }
+                        Toast.makeText(context, "Se agregó ${producto.nombre} al carrito", Toast.LENGTH_SHORT).show()
                         alRegresar()
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -146,10 +157,10 @@ fun PantallaDetalle(
 @Composable
 fun PantallaCarrito(
     repositorio: ProductosRepository,
-    gestorCarrito: GestorCarrito,
+    dataStoreManager: DataStoreManager,
     alRegresar: () -> Unit
 ) {
-    val articulosCarrito = gestorCarrito.obtenerArticulosCarrito()
+    val articulosCarrito by dataStoreManager.carritoFlow.collectAsState(initial = emptyMap())
     val productosEnCarrito = articulosCarrito.mapNotNull { (idArticulo, cantidad) ->
         val prod = repositorio.obtenerPorId(idArticulo)
         if (prod != null) Pair(prod, cantidad) else null
@@ -182,7 +193,13 @@ fun PantallaCarrito(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(text = "${productoLista.nombre} (x$cantidad)", modifier = Modifier.weight(1f))
-                            Text(text = "$${productoLista.precio * cantidad}")
+                            Text(text = "$${productoLista.precio * cantidad}", modifier = Modifier.padding(end = 8.dp))
+                            val scope = rememberCoroutineScope()
+                            IconButton(onClick = {
+                                scope.launch { dataStoreManager.eliminarDelCarrito(productoLista.id) }
+                            }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Eliminar articulo", tint = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
